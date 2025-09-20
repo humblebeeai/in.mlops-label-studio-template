@@ -1,0 +1,31 @@
+version: '3.7'
+services:
+  ls-gws-pepsi: # replace with the project name when setting up for another project
+    image: heartexlabs/label-studio:1.20.0
+    container_name: label-studio-gws-pepsi # replace with the project name when setting up for another project
+    ports:
+      - "8080:8080" # replace with another port like 8081, 8082, etc when setting up for another project
+    environment:
+      # use GCS for persistent storage
+      STORAGE_TYPE: gcs
+      STORAGE_GCS_BUCKET_NAME: hbai-label-studio
+      STORAGE_GCS_PROJECT_ID: humblebee-project
+      STORAGE_GCS_FOLDER: "gws-pepsi/projects" # replace with the project name when setting up for another project --> {project_name}/projects
+      # instruct LS where to find your key
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/secrets/key.json # service account key path inside the container
+      # recommended for file uploads
+      USE_NGINX_FOR_UPLOADS: "false"
+      # disable signup without link
+      # LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK: "true"
+    volumes:
+      - ./data:/label-studio/data
+      - ./secrets/key.json:/opt/secrets/key.json:ro
+      - ./label_studio/main.css:/label-studio/web/dist/apps/labelstudio/main.css:ro
+      - ./label_studio/9.css:/label-studio/web/dist/apps/labelstudio/9.css:ro
+    restart: always
+    networks:
+      - ls-gws-pepsi-network # replace with the project name when setting up for another project
+
+networks:
+  ls-gws-pepsi-network: # replace with the project name when setting up for another project
+    driver: bridge   
