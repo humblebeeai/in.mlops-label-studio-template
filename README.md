@@ -2,6 +2,40 @@
 
 This is a customized version of Label Studio specifically configured for HBAI (HumbleBeeAI) with enhanced security and cloud storage integration.
 
+## Table of Contents
+
+- [Key Modifications](#key-modifications)
+  - [1. Disabled Import Functionality](#1-disabled-import-functionality)
+  - [2. Enhanced Authentication Security](#2-enhanced-authentication-security)
+  - [3. Google Cloud Storage Integration](#3-google-cloud-storage-integration)
+- [Docker Setup Guide](#docker-setup-guide)
+  - [Prerequisites](#prerequisites)
+  - [Setup Instructions](#setup-instructions)
+    - [Necessary steps](#necessary-steps)
+  - [Configuration Details](#configuration-details)
+  - [Environment Variables](#environment-variables)
+  - [Google Cloud Storage CORS Configuration](#google-cloud-storage-cors-configuration)
+    - [Setting CORS Policies](#setting-cors-policies)
+    - [CORS Policy Details](#cors-policy-details)
+- [Database Backup and Migration](#database-backup-and-migration)
+  - [Why Backup the Database?](#why-backup-the-database)
+  - [Prerequisites for Database Backup](#prerequisites-for-database-backup)
+  - [Setting Up Automated Backups](#setting-up-automated-backups)
+  - [Manual Backup](#manual-backup)
+  - [Database Migration Process](#database-migration-process)
+  - [Monitoring and Management](#monitoring-and-management)
+  - [Troubleshooting](#troubleshooting)
+- [Rebuilding Data and Annotations](#rebuilding-data-and-annotations)
+  - [Available Scripts](#available-scripts)
+  - [Step-by-Step Process](#step-by-step-process)
+  - [File Structure in GCS](#file-structure-in-gcs)
+  - [Important Notes](#important-notes)
+- [GCS Dataset Structure for Computer Vision Projects](#gcs-dataset-structure-for-computer-vision-projects)
+  - [Complete Project Structure](#complete-project-structure)
+  - [Directory Breakdown](#directory-breakdown)
+  - [Usage Examples](#usage-examples)
+  - [Best Practices](#best-practices)
+
 ## Key Modifications
 
 ### 1. Disabled Import Functionality
@@ -50,7 +84,40 @@ This is a customized version of Label Studio specifically configured for HBAI (H
    chmod 755 data
    ```
 
-4. **Initial Setup (First Run):**
+4. **Configure Docker Compose for your project:**
+
+   **IMPORTANT**: You must customize the docker-compose.yml file for each project to avoid conflicts:
+
+   a. **Edit docker-compose.yml** and modify the following settings:
+   ```yaml
+   # Change the service name to match your project
+   services:
+     ls-{your-project-name}:  # Replace {your-project-name} with your actual project name
+
+   # Change the container name
+   container_name: label-studio-{your-project-name}
+
+   # Change the port mapping to avoid conflicts (80 is used for GWS-Pepsi)
+   ports:
+     - "81:8080"  # Use 81, 82, 83, etc. for different projects
+
+   # Update the storage folder path in environment variables
+   environment:
+     - GOOGLE_APPLICATION_CREDENTIALS=/tmp/key.json
+     - STORAGE_TYPE=gcs
+     - GCS_BUCKET_NAME=hbai-label-studio
+     - GCS_PROJECT_NAME=humblebee-project
+     - GCS_FOLDER={your-project-name}/projects  # Replace with your project name
+   ```
+
+   b. **Key configurations to customize**:
+   - **Service name**: `ls-{your-project-name}` (line with service definition)
+   - **Container name**: `label-studio-{your-project-name}`
+   - **Port mapping**: Use different external ports (81, 82, etc.) to run multiple instances
+   - **GCS folder**: `{your-project-name}/projects` for organized cloud storage
+   - **Project-specific environment variables** as needed
+
+5. **Initial Setup (First Run):**
    
    **IMPORTANT**: On the first run, you need to enable user signup to create the initial admin user:
    
@@ -83,10 +150,37 @@ This is a customized version of Label Studio specifically configured for HBAI (H
    docker-compose up -d
    ```
 
-5. **Access Label Studio (After Initial Setup):**
-   - Open your browser and navigate to `http://localhost:8080`
+6. **Access Label Studio (After Initial Setup):**
+   - Open your browser and navigate to `http://localhost:80` (or your custom port like 81)
    - Login with your admin account
    - Use invite links to add additional users (signup page will no longer be available)
+
+7. **Set up automated database backup:**
+
+   **IMPORTANT**: Configure automated backups to protect your annotation data and enable easy server migration.
+
+   a. **Configure backup settings** in `backup_db.sh`:
+   ```bash
+   # Edit the following variables in backup_db.sh
+   DB_PATH="/path/to/data/label_studio.sqlite3"
+   GCS_BUCKET="gs://hbai-label-studio/{your-project-name}/db_backup/"
+   SERVICE_ACCOUNT_KEY="/path/to/secrets/key.json"
+   BACKUP_FILENAME="label_studio_{your-project-name}_${TIMESTAMP}.sqlite3"
+   ```
+
+   b. **Set up daily backups (recommended)**:
+   ```bash
+   cd /root/label-studio-{your-project-name}
+   ./setup_cron.sh
+   ```
+
+   c. **Verify the backup setup**:
+   ```bash
+   crontab -l  # Check if cron job is installed
+   ./backup_db.sh  # Run manual backup to test
+   ```
+
+   This ensures your data is regularly backed up to Google Cloud Storage for protection and easy migration.
 
 ### Configuration Details
 
@@ -164,7 +258,7 @@ This preserves all your projects, annotations, users, and configurations without
 1. **First change configs in `backup_db.sh` file**:
    ```sh
    DB_PATH="/path/to/data/label_studio.sqlite3"
-   GCS_BUCKET="gs://gws-{company_name}/ls/db_backup/"
+   GCS_BUCKET="gs://gws-{company_name}/db_backup/"
    SERVICE_ACCOUNT_KEY="/path/to/secrets/key.json"
    BACKUP_FILENAME="label_studio_{project_name}_${TIMESTAMP}.sqlite3" 
    
@@ -265,3 +359,147 @@ This opens your crontab in an editor. Find the backup job line, delete it, then 
 - **Verify CORS is set correctly** - this is required for file uploads to work
 - Verify Docker containers are running: `docker-compose ps`
 - Check logs: `docker-compose logs ls-{your-project-name}`
+
+## Rebuilding Data and Annotations
+
+When you have existing data with labels that need to be reconstructed or reimported into Label Studio, use the provided scripts to rebuild your dataset and annotations in the correct format.
+
+### Available Scripts
+
+The `scripts/` directory contains utilities for different annotation formats:
+
+- **Detection format**: `scripts/make_json_annotation_for_detection.py`
+- **Segmentation with polygons**: `scripts/make_json_annotation_for_segmentation.py`
+
+### Step-by-Step Process
+
+1. **Prepare your annotation JSON file:**
+
+   **For detection datasets:**
+   ```bash
+   python scripts/make_json_annotation_for_detection.py
+   ```
+
+   **For segmentation with polygons:**
+   ```bash
+   python scripts/make_json_annotation_for_segmentation.py
+   ```
+
+2. **Upload annotation JSON to GCS:**
+   ```bash
+   gsutil cp your_annotations.json gs://hbai-label-studio/{your_project_name}/projects/annotations_json/{project_number_in_label_studio}/
+   ```
+
+3. **Upload data images to GCS:**
+   ```bash
+   gsutil -m cp -r your_images_folder/* gs://hbai-label-studio/{your_project_name}/projects/{project_number_in_label_studio}/
+   ```
+
+4. **Configure Label Studio project:**
+
+   a. **Go to your project settings** in the Label Studio UI
+
+   b. **Add Source Cloud Storage:**
+   - Navigate to Settings → Cloud Storage → Source Storage
+   - Add new GCS storage pointing to your annotation JSON file:
+     ```
+     gs://hbai-label-studio/projects/annotations_json/{project_number_in_label_studio}/your_annotations.json
+     ```
+
+   c. **Sync the source storage:**
+   - Click "Sync" on the added source cloud storage
+   - This will import all the pre-annotated data into your Label Studio project
+
+### File Structure in GCS
+
+After following the process, your GCS bucket structure should look like:
+
+```
+gs://hbai-label-studio/{your_project_name}/
+├── projects/
+│   ├── {project_number_in_label_studio}/
+│   │   ├── image1.jpg
+│   │   ├── image2.jpg
+│   │   └── ...
+│   └── annotations_json/
+│       └── {project_number_in_label_studio}/
+│           └── your_annotations.json
+```
+
+### Important Notes
+
+- Replace `{your_project_name}` with the actual name of your project
+- Replace `{project_number_in_label_studio}` with your actual project number from the Label Studio UI
+- Ensure your images are accessible from the annotation JSON file paths
+- The annotation JSON should contain proper Label Studio format annotations
+- Always test with a small subset of data first before uploading large datasets
+
+## GCS Dataset Structure for Computer Vision Projects
+
+Each Computer Vision project follows a standardized structure in Google Cloud Storage to organize datasets, annotations, and backups efficiently.
+
+### Complete Project Structure
+
+```
+gs://hbai-label-studio/{your_project_name}/
+├── db_backup/
+│   ├── label_studio_{your-project-name}_20250101_120000.sqlite3
+│   ├── label_studio_{your-project-name}_20250102_120000.sqlite3
+│   └── ...
+├── projects/
+│   ├── 1/                          # Project ID 1 images
+│   │   ├── image001.jpg
+│   │   ├── image002.jpg
+│   │   └── ...
+│   ├── 2/                          # Project ID 2 images
+│   │   ├── image001.jpg
+│   │   ├── image002.jpg
+│   │   └── ...
+│   ├── .../                        # Additional project directories
+│   └── annotations_json/
+│       ├── 1/                      # Project ID 1 annotations
+│       │   └── annotations.json
+│       ├── 2/                      # Project ID 2 annotations
+│       │   └── annotations.json
+│       └── .../                    # Additional annotation directories
+```
+
+### Directory Breakdown
+
+**`db_backup/`**
+- Contains automated database backups with timestamps
+- Format: `label_studio_{your-project-name}_${TIMESTAMP}.sqlite3`
+- Essential for data recovery and server migration
+
+**`projects/{project_id}/`**
+- Contains all image files for each Label Studio project
+- Project ID corresponds to the project number in Label Studio UI
+- Supports common image formats: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.tiff`
+
+**`projects/annotations_json/{project_id}/`**
+- Contains annotation JSON files for pre-labeled data
+- Used for importing existing annotations into Label Studio
+- JSON format must match Label Studio's annotation schema
+
+### Usage Examples
+
+**For a project named "traffic-detection":**
+```
+gs://hbai-label-studio/traffic-detection/
+├── db_backup/
+│   └── label_studio_traffic-detection_20250926_090000.sqlite3
+├── projects/
+│   ├── 1/                          # Detection project
+│   │   ├── car_001.jpg
+│   │   ├── car_002.jpg
+│   │   └── truck_001.jpg
+│   ├── 2/                          # Segmentation project
+│   │   ├── road_001.jpg
+│   │   ├── road_002.jpg
+│   │   └── intersection_001.jpg
+│   └── annotations_json/
+│       ├── 1/
+│       │   └── detection_annotations.json
+│       └── 2/
+│           └── segmentation_annotations.json
+```
