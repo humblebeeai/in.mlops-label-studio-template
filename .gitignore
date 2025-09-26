@@ -1,0 +1,21 @@
+# exclude venv directory
+venv/
+.venv/
+env/
+
+# exclude Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# exclude environment variable files
+.env
+*.env
+
+# exclude data directory
+data/
+
+# exclude secrets directory
+
+secrets/

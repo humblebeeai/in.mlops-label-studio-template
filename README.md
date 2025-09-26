@@ -16,7 +16,7 @@ This is a customized version of Label Studio specifically configured for HBAI (H
 
 ### 3. Google Cloud Storage Integration
 - Custom GCS (Google Cloud Storage) configured as both **Consistent** and **Source Storage**
-- Seamless integration with GWS GCS bucket
+- Seamless integration with HBAI GCS bucket
 - Automatic file synchronization and backup
 
 ## Docker Setup Guide
@@ -24,7 +24,7 @@ This is a customized version of Label Studio specifically configured for HBAI (H
 ### Prerequisites
 - Docker and Docker Compose installed
 - Google Cloud Service Account key file
-- Access to the GWS GCS bucket
+- Access to the HBAI Label Studio GCS bucket
 
 ### Setup Instructions
 

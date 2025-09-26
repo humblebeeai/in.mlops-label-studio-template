@@ -7,11 +7,17 @@
 set -e
 
 # Configuration
-DB_PATH="/path/to/data/label_studio.sqlite3" #  Change to your Label Studio SQLite database path
-GCS_BUCKET="gs://hbai-label-studio/gws-pepsi/db_backup/" # Change to a suitable project's GCS folder in the bucket --> gs://hbai-label-studio/{project_name}/db_backup/
-SERVICE_ACCOUNT_KEY="/path/to/secrets/key.json" # Change to your service account key path
+DB_PATH="/home/bekhzod/label-studio-gws/data/label_studio.sqlite3"
+GCS_BUCKET="gs://hbai-label-studio/gws-pepsi/db_backup/"
+SERVICE_ACCOUNT_KEY="/home/bekhzod/label-studio-gws/secrets/key.json"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_FILENAME="label_studio_gws_pepsi_${TIMESTAMP}.sqlite3" # Need to replace the project name --> label_studio_{project_name}_${TIMESTAMP}.sqlite3
+BACKUP_FILENAME="label_studio_gws_pepsi_${TIMESTAMP}.sqlite3"
+
+# Verify service account key permissions
+if [ "$(stat -c "%a" "$SERVICE_ACCOUNT_KEY")" != "755" ]; then
+    echo "Warning: Fixing service account key file permissions..."
+    chmod 755 "$SERVICE_ACCOUNT_KEY"
+fi
 
 # Ensure database exists
 if [ ! -f "$DB_PATH" ]; then
@@ -38,6 +44,12 @@ if ! command -v gsutil &> /dev/null; then
     exit 1
 fi
 
+# Test bucket access
+if ! gsutil ls "$GCS_BUCKET" &>/dev/null; then
+    echo "Error: Cannot access GCS bucket. Check permissions and bucket name."
+    exit 1
+fi
+
 # Create a copy of the database to avoid locking issues during backup
 TEMP_DB_PATH="/tmp/${BACKUP_FILENAME}"
 cp "$DB_PATH" "$TEMP_DB_PATH"
@@ -50,8 +62,8 @@ if gsutil cp "$TEMP_DB_PATH" "${GCS_BUCKET}${BACKUP_FILENAME}"; then
     rm "$TEMP_DB_PATH"
     
     # Optional: List recent backups
-    echo "Recent backups in GCS bucket:"
-    gsutil ls -l "${GCS_BUCKET}" | tail -5
+    # echo "Recent backups in GCS bucket:"
+    # gsutil ls -l "${GCS_BUCKET}" | tail -5
 else
     echo "Backup failed!"
     rm "$TEMP_DB_PATH"

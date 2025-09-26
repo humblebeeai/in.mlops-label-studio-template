@@ -8,8 +8,8 @@
 #   ./setup_cron.sh           # Sets up weekly backups (default)
 #   ./setup_cron.sh monthly   # Sets up monthly backups instead
 
-SCRIPT_PATH="label-studio-gws/backup_db.sh" # Change to your backup script path
-LOG_PATH="label-studio-gws/backup.log"
+SCRIPT_PATH="/home/bekhzod/label-studio-gws/backup_db.sh" # Change to your backup script path
+LOG_PATH="backup.log"
 BACKUP_TYPE="${1:-daily}"  # Default to weekly if no argument provided
 
 # Ensure backup script exists and is executable
