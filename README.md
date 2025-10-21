@@ -41,8 +41,8 @@ This is a customized version of Label Studio specifically configured for HBAI (H
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url> label-studio-{your-project-name}
-   cd label-studio-{your-project-name}
+   git clone <repository-url> {your-project-name}
+   cd {your-project-name}
 
    ```
 
@@ -71,9 +71,9 @@ This is a customized version of Label Studio specifically configured for HBAI (H
    # Change the container name
    container_name: label-studio-{your-project-name}
 
-   # Change the port mapping to avoid conflicts (80 is used for GWS-Pepsi)
+   # Change the port mapping to avoid conflicts (8800 is used for GWS-Pepsi)
    ports:
-     - "81:8080"  # Use 81, 82, 83, etc. for different projects
+     - "8800:8080"  # Use 8801, 8802, 8803, etc. for different projects
 
    # Update the storage folder path in environment variables
    environment:
@@ -87,7 +87,7 @@ This is a customized version of Label Studio specifically configured for HBAI (H
    b. **Key configurations to customize**:
    - **Service name**: `ls-{your-project-name}` (line with service definition)
    - **Container name**: `label-studio-{your-project-name}`
-   - **Port mapping**: Use different external ports (81, 82, etc.) to run multiple instances
+   - **Port mapping**: Use different external ports (8800, 8802, etc.) to run multiple instances
    - **GCS folder**: `{your-project-name}/projects` for organized cloud storage
    - **Project-specific environment variables** as needed
 
@@ -125,7 +125,7 @@ This is a customized version of Label Studio specifically configured for HBAI (H
    ```
 
 6. **Access Label Studio (After Initial Setup):**
-   - Open your browser and navigate to `http://localhost:80` (or your custom port like 81)
+   - Open your browser and navigate to `http://localhost:8800` (or your custom port like 8801)
    - Login with your admin account
    - Use invite links to add additional users (signup page will no longer be available)
 
@@ -243,19 +243,19 @@ This preserves all your projects, annotations, users, and configurations without
 **For daily backups (default - every day at 0 AM)** 
 It is recomended to backup daily(default) 
 ```bash
-cd /root/label-studio-{your-project-name}
+cd /root/label-studio/{your-project-name}
 ./setup_cron.sh
 ```
 
 **For weekly backups (every Sunday at 0 AM):**
 ```bash
-cd /root/label-studio-{your-project-name}
+cd /root/label-studio/{your-project-name}
 ./setup_cron.sh weekly
 ```
 
 **For monthly backups (1st of each month at 0 AM):**
 ```bash
-cd /root/label-studio-{your-project-name}
+cd /root/label-studio/{your-project-name}
 ./setup_cron.sh monthly
 ```
 
@@ -268,7 +268,7 @@ crontab -l
 
 **Run a backup anytime:**
 ```bash
-cd /root/label-studio-{your-project-name}
+cd /root/label-studio/{your-project-name}
 ./backup_db.sh
 ```
 
@@ -307,7 +307,7 @@ This creates a backup with timestamp like: `label_studio_{your-project-name}_202
 
 **Check backup logs:**
 ```bash
-tail -f /root/label-studio-{your-project-name}/logs/backup.log
+tail -f /root/label-studio/{your-project-name}/logs/backup.log
 ```
 
 **List recent backups in GCS:**
