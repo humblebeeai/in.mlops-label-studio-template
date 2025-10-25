@@ -7,6 +7,7 @@ This is a customized version of Label Studio specifically configured for HBAI (H
 - [Key Modifications](#key-modifications)
 - [Docker Setup Guide](#docker-setup-guide)
 - [Database Backup and Migration](#database-backup-and-migration)
+- [Tailscale Network Configuration](#tailscale-network-configuration)
 - [Rebuilding Data and Annotations](#rebuilding-data-and-annotations)
 - [GCS Dataset Structure for Computer Vision Projects](#gcs-dataset-structure-for-computer-vision-projects)
 
@@ -333,6 +334,175 @@ This opens your crontab in an editor. Find the backup job line, delete it, then 
 - **Verify CORS is set correctly** - this is required for file uploads to work
 - Verify Docker containers are running: `docker-compose ps`
 - Check logs: `docker-compose logs ls-{your-project-name}`
+
+## Tailscale Network Configuration
+
+If you're running Label Studio on a server with Tailscale and experience issues with YOLO export (images not downloading, connection timeouts), you may need to configure iptables rules to allow Docker containers to access the host through the Tailscale network.
+
+### Problem Description
+
+**Symptoms:**
+- Export with images (e.g., "YOLO with images") fails with connection timeout errors
+- Logs show: `Connection to <tailscale-ip> timed out`
+- Error message: `Unable to download gs://... The item will be skipped`
+
+**Root Cause:**
+Tailscale's firewall rules (`ts-input` chain) block traffic from Docker containers trying to access the host's Tailscale IP address. This prevents the export process from downloading images through the presign endpoint.
+
+### Solution: Configure Systemd Service for iptables
+
+This solution allows Docker containers to access Label Studio ports on the Tailscale IP address. It's safe, scalable, and works for all Label Studio projects.
+
+#### Step 1: Create the Systemd Service
+
+```bash
+# Create the service file
+sudo tee /etc/systemd/system/label-studio-tailscale.service > /dev/null <<'EOF'
+[Unit]
+Description=Allow Docker containers to access Label Studio on Tailscale IP
+After=tailscaled.service docker.service
+Requires=tailscaled.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c 'sleep 2 && iptables -C ts-input -s 172.16.0.0/12 -d <TAILSCALE_IP> -p tcp -m multiport --dports 8800:8850 -j ACCEPT 2>/dev/null || iptables -I ts-input 3 -s 172.16.0.0/12 -d <TAILSCALE_IP> -p tcp -m multiport --dports 8800:8850 -j ACCEPT'
+ExecStop=/bin/bash -c 'iptables -D ts-input -s 172.16.0.0/12 -d <TAILSCALE_IP> -p tcp -m multiport --dports 8800:8850 -j ACCEPT 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+**Important:** Replace `<TAILSCALE_IP>` with your server's Tailscale IP address (e.g., `100.100.1.20`).
+
+To find your Tailscale IP:
+```bash
+tailscale ip -4
+```
+
+#### Step 2: Enable and Start the Service
+
+```bash
+# Reload systemd to recognize the new service
+sudo systemctl daemon-reload
+
+# Start the service (test mode - doesn't auto-start on boot yet)
+sudo systemctl start label-studio-tailscale.service
+
+# Check if it's working
+sudo systemctl status label-studio-tailscale.service
+
+# Verify the iptables rule was added
+sudo iptables -L ts-input -n -v --line-numbers | grep "8800:8850"
+```
+
+#### Step 3: Test the Export
+
+1. Go to your Label Studio project
+2. Try exporting annotations with "YOLO with images" format
+3. If it works successfully, enable auto-start on boot:
+
+```bash
+sudo systemctl enable label-studio-tailscale.service
+```
+
+### Managing the Systemd Service
+
+**Check service status:**
+```bash
+sudo systemctl status label-studio-tailscale.service
+```
+
+**View service logs:**
+```bash
+sudo journalctl -u label-studio-tailscale.service -f
+```
+
+**Restart the service:**
+```bash
+sudo systemctl restart label-studio-tailscale.service
+```
+
+**Stop the service:**
+```bash
+sudo systemctl stop label-studio-tailscale.service
+```
+
+**Disable auto-start on boot:**
+```bash
+sudo systemctl disable label-studio-tailscale.service
+```
+
+**Remove the service completely:**
+```bash
+# Stop and disable the service
+sudo systemctl stop label-studio-tailscale.service
+sudo systemctl disable label-studio-tailscale.service
+
+# Remove the service file
+sudo rm /etc/systemd/system/label-studio-tailscale.service
+
+# Reload systemd
+sudo systemctl daemon-reload
+
+# Manually remove the iptables rule
+sudo iptables -D ts-input -s 172.16.0.0/12 -d <TAILSCALE_IP> -p tcp -m multiport --dports 8800:8850 -j ACCEPT
+```
+
+### What This Configuration Does
+
+- **Allows**: Docker containers (from any Docker bridge network) to access Label Studio ports (8800-8850) on the server's Tailscale IP
+- **Port Range**: 8800-8850 covers all Label Studio instances on the server
+- **Security**: Only affects Label Studio ports, doesn't bypass Tailscale security for other services
+- **Persistence**: Automatically applies the rule on boot and after Tailscale restarts
+
+### Troubleshooting the Tailscale Configuration
+
+**If export still fails after enabling the service:**
+
+1. Check if the iptables rule is present:
+   ```bash
+   sudo iptables -L ts-input -n -v --line-numbers
+   ```
+   You should see a rule with source `172.16.0.0/12` and destination `<TAILSCALE_IP>` on ports `8800:8850`.
+
+2. Verify the rule is in the correct position (should be line 3 or higher, before any DROP rules):
+   ```bash
+   sudo iptables -L ts-input -n -v --line-numbers | head -10
+   ```
+
+3. Test connectivity from inside a container:
+   ```bash
+   sudo docker exec -it label-studio-<project-name> curl -v http://<TAILSCALE_IP>:8805/api/health
+   ```
+   This should return a 200 OK response.
+
+4. Check service status for errors:
+   ```bash
+   sudo systemctl status label-studio-tailscale.service
+   sudo journalctl -u label-studio-tailscale.service -n 50
+   ```
+
+**If the service fails to start:**
+
+- Verify Tailscale is running: `sudo systemctl status tailscaled`
+- Check that the Tailscale IP in the service file matches your actual Tailscale IP: `tailscale ip -4`
+- Ensure Docker is running: `sudo systemctl status docker`
+
+### Alternative: Manual iptables Rule (Temporary)
+
+If you prefer not to use the systemd service, you can manually add the iptables rule. Note that this rule will be lost after a reboot:
+
+```bash
+# Replace <TAILSCALE_IP> with your server's Tailscale IP
+sudo iptables -I ts-input 3 -s 172.16.0.0/12 -d <TAILSCALE_IP> -p tcp -m multiport --dports 8800:8850 -j ACCEPT
+```
+
+To verify:
+```bash
+sudo iptables -L ts-input -n -v --line-numbers
+```
 
 ## Rebuilding Data and Annotations
 
