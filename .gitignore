@@ -15,6 +15,7 @@ __pycache__/
 
 # exclude data directory
 data/
+*.db
 
 # exclude secrets directory
 

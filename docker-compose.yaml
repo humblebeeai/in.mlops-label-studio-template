@@ -4,7 +4,7 @@ services:
     image: heartexlabs/label-studio:1.20.0
     container_name: label-studio-gws-pepsi # replace with the project name when setting up for another project
     ports:
-      - "80:8080" # replace with another external port like 81, 82, etc when setting up for another project
+      - "8800:8080" # replace with another external port like 81, 82, etc when setting up for another project
     environment:
       # use GCS for persistent storage
       STORAGE_TYPE: gcs
@@ -24,8 +24,36 @@ services:
       - ./label_studio/9.css:/label-studio/web/dist/apps/labelstudio/9.css:ro
     restart: always
     networks:
-      - ls-gws-pepsi-network # replace with the project name when setting up for another project
+      ls-gws-network: # replace with the project name when setting up for another project
+        ipv4_address: 10.1.0.10 # static IP for LS container. Change the subnet like 10.X.0.10 when setting up for another project -> to 1,2,3, etc.
+
+  webhook-listener:
+    build:
+      context: .
+      dockerfile: Dockerfile.webhook
+    container_name: ls-webhook-listener-gws # replace with the project name when setting up for another project
+    ports:
+      - "8600:8600"
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /opt/secrets/key.json
+      GCS_BUCKET_NAME: hbai-label-studio
+      WEBHOOK_PORT: "8600"
+      # Optional: Set a webhook secret for authentication
+      # WEBHOOK_SECRET: your_secret_here
+    volumes:
+      - ./secrets/key.json:/opt/secrets/key.json:ro,z
+      - ./webhook-data:/data
+      - ./data:/ls-data:ro
+    restart: always
+    networks:
+      ls-gws-network:
+        ipv4_address: 10.1.0.20
+
 
 networks:
-  ls-gws-pepsi-network: # replace with the project name when setting up for another project
-    driver: bridge   
+  ls-gws-network: # replace with the project name when setting up for another project
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.1.0.0/16
+          gateway: 10.1.0.1
