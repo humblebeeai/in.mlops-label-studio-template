@@ -547,7 +547,7 @@ The `scripts/` directory contains utilities for different annotation formats:
    - Navigate to Settings → Cloud Storage → Source Storage
    - Add new GCS storage pointing to your annotation JSON file:
      ```
-     gs://hbai-label-studio/projects/annotations_json/{project_number_in_label_studio}/your_annotations.json
+     gs://hbai-label-studio/projects/annotations_json/{project_number_in_label_studio}/
      ```
 
    c. **Sync the source storage:**
